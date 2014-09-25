@@ -1,0 +1,94 @@
+apply plugin: 'com.android.application'
+
+dependencies {
+    // Include ig-json-parser
+    compile 'com.instagram:ig-json-parser-processor:+'
+
+    // Include any other libraries you need
+    // ...
+}
+
+// Define the desired source path for the generated files (do not choose your main source folder for this!)
+def igparserSrcPath = 'src/main/gen-java'
+
+android {
+    // General configuration goes here
+    compileSdkVersion 20
+    buildToolsVersion "20.0.0"
+
+    defaultConfig {
+        // ...
+    }
+    buildTypes {
+        // ...
+    }
+
+    // Add ig-json-parser folder to source sets
+    sourceSets {
+        main.java.srcDirs += igparserSrcPath
+    }
+}
+
+// Define some external variables
+ext {
+    // Source folder containing ig-json-parser classes
+    igparserSrcFolder = file(igparserSrcPath)
+
+    // Flag indicating that the ig-json-parser should run only once per build process
+    igparserProcessed = false
+}
+
+// Recursive delete helper function
+def deleteFolder(folder) {
+    // Grab the sub files in the directory
+    def entries = folder.list()
+
+    // If there are none, this is a File or an empty dir; delete it
+    if (entries == null || entries.size() == 0) {
+        return folder.delete()
+
+    } else {
+
+        // If there are files, iterate over them
+        for (entry in entries) {
+            def file = new File(folder.getPath(), entry)
+
+            // Each directory gets the same algorithm applied to
+            if (file.isDirectory()) {
+                deleteFolder(file)
+            } else {
+                // Files get deleted right away
+                file.delete()
+            }
+        }
+    }
+}
+
+// Inject ig-json-parser Processor into the build process
+android.applicationVariants.all { variant ->
+    // Only do this once
+    if (!igparserProcessed) {
+
+        // Log out that the ig-json-parser runs now
+        println "*** processing ig-json-parser class generation..."
+
+        // Add a hook to the variant's javaCompile task
+        variant.javaCompile.doFirst {
+
+            // Recursively delete the gen-java folder containing JsonHelpers
+            deleteFolder(igparserSrcFolder)
+
+            // Create the gen-java folder anew and add the processor to the compiler's args
+            igparserSrcFolder.mkdirs()
+            variant.javaCompile.options.compilerArgs += [
+                    '-processor',
+                    'com.instagram.common.json.annotation.processor.JsonAnnotationProcessor',
+                    '-s',
+                    igparserSrcFolder
+            ]
+        }
+
+        // Processed successfully
+        igparserProcessed = true
+    }
+}
